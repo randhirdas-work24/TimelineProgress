@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Planning Gantt Chart - Interactive Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chart.js Datalabels Plugin CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+    <style>
+        /* Universal box-sizing for consistent layout */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Body styling: font, background gradient, and text color */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            min-height: 100vh; /* Ensure full viewport height */
+            color: #2c3e50;
+            font-size: 0.78em; /* Slightly further decreased base font size for overall application */
+        }
+
+        /* Dashboard container for overall layout */
+        .dashboard {
+            max-width: 1600px; /* Max width for larger screens */
+            margin: 0 auto; /* Center the dashboard */
+            padding: 20px;
+            position: relative; /* Needed for absolute positioning of configure button */
+        }
+
+        /* Header styling for title and subtitle */
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 20px; /* Reduced margin */
+        }
+
+        .header h1 {
+            font-size: 1.7em; /* Reduced font size */
+            margin-bottom: 5px; /* Reduced margin */
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3); /* Subtle text shadow */
+        }
+
+        .header p {
+            font-size: 0.85em; /* Reduced font size */
+            opacity: 0.9;
+        }
+
+        /* Project overview section with a responsive grid layout for 3 columns */
+        .project-overview {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); /* Reverted to equal 3 columns */
+            gap: 12px; /* Gap between the main grid items (columns) */
+            margin-bottom: 18px;
+            justify-content: center;
+            align-items: stretch; /* Crucial: Ensures grid items stretch to match the height of the tallest item in their row */
+        }
+
+        /* Container for two cards to make them align as one logical unit */
+        .card-pair-container {
+            display: flex;
+            flex-direction: column; /* Stack cards vertically within this container */
+            gap: 12px; /* Gap between cards inside this pair container */
+            height: 100%; /* Important: Make the container fill its grid cell height */
+        }
+
+        /* Styling for individual overview cards */
+        .overview-card {
+            background: rgba(255, 255, 255, 0.95); /* Semi-transparent white background */
+            border-radius: 14px; /* Increased border-radius for more rounded edges */
+            padding: 10px; /* Reduced padding for less whitespace */
+            box-shadow: 0 5px 18px rgba(0,0,0,0.1); /* Refined shadow */
+            backdrop-filter: blur(5px); /* Slightly less blur */
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            width: 100%; /* Ensure it takes full width of its parent (grid cell or flex container) */
+            display: flex; /* Use flexbox for internal alignment */
+            flex-direction: column; /* Stack content vertically */
+            justify-content: flex-start; /* Align content to the start */
+            align-items: flex-start; /* Left align content horizontally */
+            overflow-y: auto; /* Allow individual cards to scroll if their content is too large */
+            text-align: left; /* Left align text content within the card */
+            /* Removed min-height from here */
+        }
+
+        /* Set a fixed height for the pie chart card */
+        #devCapacityCard {
+            height: 350px; /* Fixed height for the pie chart card */
+        }
+
+        /* Add specific styling for the canvas inside the overview card */
+        .overview-card canvas {
+            display: block; /* Ensure it takes up full width and height properly */
+            width: 100%;
+            height: 100%; /* This should now correctly refer to the parent's height */
+            /* Removed min-height from here */
+        }
+
+        /* Cards that are children of a card-pair-container should share the height */
+        .card-pair-container .overview-card {
+            flex: 1; /* Each card takes equal remaining space within the column container */
+        }
+
+        .overview-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+        }
+
+        .overview-card p {
+            margin-bottom: 2px; /* Reduced margin for paragraphs inside cards */
+            line-height: 1.2; /* Adjusted line height */
+            font-size: 0.9em; /* Reduced font size for project metrics details */
+            font-weight: normal; /* Ensure paragraph content is not bold */
+            text-align: left; /* Ensure text within paragraphs is left-aligned */
+        }
+
+        .overview-card p:last-child {
+            margin-bottom: 0; /* Remove margin from last paragraph */
+        }
+
+        /* Card title styling */
+        .card-title {
+            font-size: 1.0em; /* Reduced font size */
+            font-weight: 700; /* Card title remains bold */
+            margin-bottom: 4px; /* Reduced margin */
+            color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 5px; /* Reduced gap */
+            justify-content: flex-start; /* Left align title content horizontally */
+        }
+
+        /* Styling for confidence badges */
+        .confidence-badge {
+            background: linear-gradient(135deg, #27ae60, #2ecc71); /* Green gradient */
+            color: white;
+            padding: 1px 5px; /* Reduced padding */
+            border-radius: 7px; /* Slightly smaller border-radius */
+            font-size: 0.8em; /* Increased font size */
+            font-weight: 600;
+        }
+
+        /* Specific gradients for different confidence levels */
+        .confidence-5 { background: linear-gradient(135deg, #27ae60, #2ecc71); } /* Very High (Green) */
+        .confidence-4 { background: linear-gradient(135deg, #3498db, #2980b9); } /* High (Blue) */
+        .confidence-3 { background: linear-gradient(135deg, #f39c12, #e67e22); } /* Medium (Orange) */
+        .confidence-2 { background: linear-gradient(135deg, #008080, #00CED1); } /* Changed from red to teal */
+        .confidence-1 { background: linear-gradient(135deg, #8e44ad, #9b59b6); } /* Very Low (Purple) */
+
+        /* Gantt chart container for background and overflow */
+        .gantt-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px; /* Slightly smaller border-radius */
+            padding: 12px; /* Reduced padding */
+            box-shadow: 0 6px 20px rgba(0,0,0,0.1); /* Refined shadow */
+            margin-bottom: 20px; /* Reduced margin */
+            overflow-x: auto; /* Enable horizontal scrolling for the chart */
+        }
+
+        /* Gantt chart table styling */
+        .gantt-chart {
+            min-width: 1000px; /* Further reduced min-width for a more justified chart */
+            border-collapse: collapse;
+            width: 100%;
+            font-size: 0.85em; /* Increased chart font size for all blocks */
+        }
+
+        /* Table header styling */
+        .gantt-chart th {
+            background: linear-gradient(135deg, #4a69bd, #6a82fb); /* New lighter blue gradient */
+            color: white;
+            padding: 10px 12px; /* Adjusted padding for better header height */
+            text-align: center;
+            font-weight: 600;
+            position: sticky; /* Sticky headers for scrolling */
+            top: 0;
+            z-index: 10;
+            border-radius: 10px; /* Rounded corners for header */
+            font-size: 1.3em; /* Increased font size for chart header */
+            border-right: 1px solid rgba(255, 255, 255, 0.3); /* Separator */
+        }
+
+        .gantt-chart thead th:last-child { /* Remove border from the last header */
+            border-right: none;
+        }
+
+        .gantt-chart thead th:first-child { /* Apply border radius to all corners */
+            border-top-left-radius: 10px;
+            border-bottom-left-radius: 10px;
+        }
+        .gantt-chart thead th:last-child { /* Apply border radius to all corners */
+            border-top-right-radius: 10px;
+            border-bottom-right-radius: 10px;
+        }
+
+
+        /* Table cell styling */
+        .gantt-chart td {
+            padding: 4px 6px; /* Reduced padding for decreased height */
+            text-align: center;
+            border: 1px solid #ecf0f1; /* Light border */
+            vertical-align: middle;
+            position: relative;
+            min-height: 35px; /* Reduced min-height */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Ensure font matches application */
+        }
+
+        /* Task name column styling (kept for potential future use or if user changes mind) */
+        .task-name {
+            text-align: left !important;
+            font-weight: 600;
+            background: #f8f9fa; /* Light background */
+            min-width: 250px; /* Reduced min-width */
+            color: #2c3e50;
+            padding: 15px !important; /* Reduced padding */
+            font-size: 1em; /* Reduced font size */
+        }
+
+        /* Styling for different task types (development, testing, etc.) */
+        .development, .testing, .regression, .go-no-go, .deployment, .bug-fix, .code-freeze {
+            color: white; /* Default text color for these blocks */
+            font-weight: 600;
+            border-radius: 18px; /* Increased border-radius for more rounded edges */
+            padding: 5px 4px; /* Reduced padding for decreased height */
+            margin: 1px; /* Reduced margin */
+            box-shadow: 0 1px 4px rgba(0,0,0,0.15); /* Refined shadow */
+            animation: slideIn 0.5s ease; /* Animation on load */
+            position: relative;
+            min-width: 230px; /* Adjusted min-width for blocks */
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            line-height: 1.2; /* Adjusted line height for 3 lines */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Ensure font matches application */
+        }
+
+        /* Specific style for the strong tag within task blocks to change its color */
+        .development strong,
+        .testing strong,
+        .regression strong,
+        .go-no-go strong,
+        .deployment strong,
+        .bug-fix strong,
+        .code-freeze strong {
+            color: white; /* Changed to white */
+            font-size: 1.1em; /* Increased font size */
+        }
+
+        .development:hover, .testing:hover, .regression:hover, .go-no-go:hover, .deployment:hover, .bug-fix:hover, .code-freeze:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+
+        /* New background colors for blocks */
+        .development { background: linear-gradient(135deg, #6a82fb, #fc5c7d); } /* Soft Blue to Pink */
+        .testing { background: linear-gradient(135deg, #20bf55, #01baef); } /* Green to Light Blue */
+        .regression { background: linear-gradient(135deg, #f7b733, #fc4a1a); } /* Orange to Red-Orange */
+        .go-no-go { background: linear-gradient(135deg, #8360c3, #2ebf91); } /* Purple to Green-Teal */
+        .deployment { background: linear-gradient(135deg, #00c6ff, #0072ff); } /* Light Blue to Dark Blue */
+        .bug-fix { background: linear-gradient(135deg, #ff7e5f, #feb47b); } /* Coral to Peach */
+        .code-freeze {
+            background: linear-gradient(135deg, #4b6cb7, #182848); /* Darker Blue to Very Dark Blue */
+            border: 2px solid #a8dadc; /* Light blue border */
+        }
+
+        /* Styling for empty cells in the gantt chart */
+        .empty {
+            background: #f8f9fa;
+            opacity: 0.5;
+        }
+
+        /* Date header styling */
+        .date-header {
+            font-size: 1.3em; /* Increased font size */
+            font-weight: 600;
+            min-width: 230px; /* Reduced min-width to match blocks */
+            writing-mode: horizontal-tb; /* Ensure text is horizontal */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Ensure font matches application */
+        }
+
+        /* Legend section styling */
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 8px; /* Reduced gap */
+            margin: 8px 0; /* Reduced margin */
+            flex-wrap: wrap; /* Allow items to wrap on smaller screens */
+        }
+
+        /* Individual legend item styling */
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px; /* Reduced gap */
+            background: rgba(255, 255, 255, 0.2); /* Semi-transparent background */
+            padding: 3px 7px; /* Reduced padding */
+            border-radius: 12px; /* Slightly smaller border-radius */
+            color: white;
+            font-size: 0.8em; /* Increased font size */
+        }
+
+        /* Color swatch in the legend */
+        .legend-color {
+            width: 8px; /* Reduced size */
+            height: 8px; /* Reduced size */
+            border-radius: 2px; /* Slightly smaller border-radius */
+            box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        /* Confidence level legend section */
+        .confidence-legend {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px; /* Slightly smaller border-radius */
+            padding: 12px; /* Reduced padding */
+            margin: 12px 0;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+        }
+
+        .confidence-legend h3 {
+            color: #2c3e50;
+            margin-bottom: 8px; /* Reduced margin */
+            text-align: center;
+            font-size: 1em; /* Reduced font size */
+        }
+
+        /* Grid for confidence items */
+        .confidence-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); /* Adjusted min-width */
+            gap: 5px; /* Reduced gap */
+        }
+
+        /* Individual confidence item styling */
+        .confidence-item {
+            display: flex;
+            align-items: center;
+            gap: 5px; /* Reduced gap */
+            padding: 5px; /* Reduced padding */
+            background: #f8f9fa; /* Light background */
+            border-radius: 4px; /* Slightly smaller border-radius */
+            font-size: 1.0em; /* Increased font size */
+        }
+
+        /* Team information text */
+        .team-info {
+            font-size: 0.55em; /* Reduced font size */
+            color: #7f8c8d; /* Grey text */
+            margin-top: 0px; /* Adjusted margin */
+            display: block;
+        }
+
+        /* Capacity indicator styling */
+        .capacity-indicator {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0px 2px; /* Reduced padding */
+            border-radius: 5px; /* Slightly smaller border-radius */
+            font-size: 0.45em; /* Reduced font size */
+            color: rgba(255, 255, 255, 0.8);
+            margin-top: 0px; /* Adjusted margin */
+            display: inline-block;
+        }
+
+        /* Task details text */
+        .task-details {
+            font-size: 0.6em; /* Reduced font size */
+            margin-top: 1px; /* Adjusted margin */
+            line-height: 1.1; /* Reduced line height */
+        }
+
+        /* Milestone marker (triangle) */
+        .milestone-marker {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 0;
+            height: 0;
+            border-left: 6px solid transparent; /* Reduced size */
+            border-right: 6px solid transparent; /* Reduced size */
+            border-top: 6px solid #f39c12; /* Orange triangle */
+        }
+
+        /* Critical path row highlighting */
+        .critical-path {
+            border-left: 2px solid #00c6ff; /* Changed to match deployment color for critical path */
+            background: rgba(0, 198, 255, 0.06); /* Lighter version of new deployment color */
+        }
+
+        /* Confidence indicator within task cells */
+        .confidence-indicator {
+            position: absolute;
+            top: 5px; /* Adjusted position to be inside */
+            right: 5px; /* Adjusted position to be inside */
+            font-size: 1.2em; /* Increased font size */
+            padding: 7px 10px; /* Increased padding */
+            border-radius: 14px; /* Slightly larger border-radius */
+            font-weight: 600;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Ensure font matches application */
+        }
+
+        /* Keyframe animation for sliding in elements */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Navigation buttons (fixed position) */
+        .navigation {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .nav-btn {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 25px;
+            color: #2c3e50;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+
+        .nav-btn:hover {
+            background: white;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+        }
+
+        /* Summary statistics section */
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); /* Adjusted min-width */
+            gap: 8px; /* Reduced gap */
+            margin-bottom: 12px;
+        }
+
+        /* Individual statistic card */
+        .stat-card {
+            background: rgba(255, 255, 255, 0.1); /* Semi-transparent white */
+            padding: 8px; /* Reduced padding */
+            border-radius: 8px;
+            text-align: center;
+            color: white;
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+        }
+
+        .stat-number {
+            font-size: 1.8em; /* Increased font size for card number */
+            font-weight: 700;
+            margin-bottom: 2px; /* Reduced margin */
+        }
+
+        .stat-label {
+            font-size: 1.2em; /* Increased font size for card label */
+            opacity: 0.9;
+        }
+
+        /* Configuration section styling */
+        .config-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 14px;
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 18px rgba(0,0,0,0.1);
+            color: #2c3e50;
+            display: none; /* Hidden by default */
+        }
+
+        .config-section h2 {
+            font-size: 1.2em;
+            margin-bottom: 10px;
+            color: #2c3e50;
+        }
+
+        .config-section textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            margin-bottom: 10px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 0.9em;
+            resize: vertical;
+        }
+
+        .config-section button {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background 0.3s ease, transform 0.2s ease;
+        }
+
+        .config-section button:hover {
+            background: linear-gradient(135deg, #2980b9, #3498db);
+            transform: translateY(-1px);
+        }
+
+        .config-section .message {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 5px;
+            font-weight: 600;
+        }
+
+        .config-section .message.error {
+            background-color: #fdd;
+            color: #c00;
+            border: 1px solid #c00;
+        }
+
+        .config-section .message.success {
+            background-color: #dfd;
+            color: #0c0;
+            border: 1px solid #0c0;
+        }
+
+        /* Configure Button Styling */
+        .configure-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #f39c12, #e67e22); /* Orange gradient */
+            color: white;
+            border: none;
+            border-radius: 50%; /* Make it round */
+            width: 50px; /* Fixed width */
+            height: 50px; /* Fixed height */
+            font-size: 0.8em; /* Adjusted font size */
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            line-height: 1.2; /* Adjust line height for multi-line text if needed */
+            padding: 5px; /* Add padding to prevent text from touching edges */
+        }
+
+        .configure-btn:hover {
+            background: linear-gradient(135deg, #e67e22, #f39c12);
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+        }
+
+
+        /* Media queries for responsiveness */
+        @media (max-width: 768px) {
+            .dashboard {
+                padding: 10px;
+            }
+
+            .header h1 {
+                font-size: 1.4em;
+            }
+
+            .gantt-chart {
+                min-width: 400px; /* Further reduced min-width for smaller screens */
+            }
+
+            .navigation {
+                bottom: 10px;
+                right: 10px;
+            }
+
+            .project-overview {
+                /* On small screens, stack columns vertically */
+                grid-template-columns: 1fr;
+                grid-auto-rows: auto; /* Allow rows to size based on content */
+            }
+
+            .card-pair-container {
+                /* On small screens, allow paired cards to take full height and stack */
+                height: auto;
+            }
+
+            .configure-btn {
+                top: 10px;
+                right: 10px;
+                width: 40px;
+                height: 40px;
+                font-size: 0.7em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>🚀 Initiative Progress Dashboard</h1>            
+        </div>
+
+        <!-- Configure Button -->
+        <button id="configureBtn" class="configure-btn">Configure</button>
+
+        <!-- Configuration Section -->
+        <div class="config-section" id="configSection">
+            <h2>⚙️ Configure Project Details (Paste JSON)</h2>
+            <p>Paste your project data in JSON format below. Click "Load Data" to update the dashboard.</p>
+            <textarea id="jsonDataInput" placeholder='
+{
+    "timeline": {
+        "start": "July 17, 2025",
+        "deployment": "September 10, 2025",
+        "duration": "8 weeks (3 sprints + deployment)",
+        "sprintCycle": "2 weeks each"
+    },
+    "teamCapacity": {
+        "developers": "6 (100% capacity)",
+        "leads": "2 (75% capacity)",
+        "qaEngineers": "2 (100% capacity)",
+        "total": "950% capacity per sprint"
+    },
+    "workflowProcess": {
+        "development": "Bug fix priority",
+        "testing": "2 weeks per sprint",
+        "regression": "Continuous validation",
+        "goNoGo": "Quality gates"
+    },
+    "codeReadyCompliance": {
+        "codeCompletion": "Functionality developed",
+        "unitTest": "Unit tests written and passed, covering edge cases",
+        "review": "Peer review completed and approved",
+        "acMet": "Acceptance Criteria fully met"
+    },
+    "developerCapacity": {
+        "featureDevelopment": 50,
+        "bugFixing": 20,
+        "spikesTechDebt": 15,
+        "supportHotfixes": 10,
+        "scrumCeremoniesMisc": 5
+    },
+    "summaryStats": {
+        "teamMembers": 10,
+        "sprints": 3,
+        "deploymentDate": "Sep 10"
+    }
+}
+            '></textarea>
+            <button id="loadDataBtn">Load Data</button>
+            <div id="messageArea" class="message"></div>
+        </div>
+
+        <!-- Summary Statistics Section -->
+        <div class="summary-stats">
+            <div class="stat-card">
+                <div class="stat-number" id="stat-working-days">40</div>
+                <div class="stat-label">Working Days</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="stat-team-members">10</div>
+                <div class="stat-label">Team Members</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="stat-sprints">3</div>
+                <div class="stat-label">Sprints</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="stat-deployment">Sep 10</div>
+                <div class="stat-label">Deployment</div>
+            </div>
+        </div>
+
+        <!-- Project Overview Section -->
+        <div class="project-overview">
+            <!-- Column 1: Project Timeline & Team Capacity (stacked vertically) -->
+            <div class="card-pair-container" id="pairedCardsContainer1">
+                <!-- Project Timeline Card -->
+                <div class="overview-card">
+                    <div class="card-title">
+                        📅 Project Timeline
+                        <span class="confidence-badge confidence-4">4/5</span>
+                    </div>
+                    <p><strong>Start:</strong> <span id="timeline-start"></span></p>
+                    <p><strong>Deployment:</strong> <span id="timeline-deployment"></span></p>
+                    <p><strong>Duration:</strong> <span id="timeline-duration"></span></p>
+                    <p><strong>Sprint Cycle:</strong> <span id="timeline-sprint-cycle"></span></p>
+                </div>
+
+                <!-- Team Capacity Card -->
+                <div class="overview-card">
+                    <div class="card-title">
+                        👥 Team Capacity
+                        <span class="confidence-badge confidence-4">4/5</span>
+                    </div>
+                    <p><strong>Developers:</strong> <span id="capacity-developers"></span></p>
+                    <p><strong>Leads:</strong> <span id="capacity-leads"></span></p>
+                    <p><strong>QA Engineers:</strong> <span id="capacity-qa"></span></p>
+                    <p><strong>Total:</strong> <span id="capacity-total"></span></p>
+                </div>
+            </div>
+
+            <!-- Column 2: Workflow Process & Delivery Compliance (stacked vertically) -->
+            <div class="card-pair-container" id="pairedCardsContainer2">
+                <!-- Workflow Process Card -->
+                <div class="overview-card">
+                    <div class="card-title">
+                        🔄 Workflow Process
+                        <span class="confidence-badge confidence-4">4/5</span>
+                    </div>
+                    <p><strong>Development:</strong> <span id="workflow-development"></span></p>
+                    <p><strong>Testing:</strong> <span id="workflow-testing"></span></p>
+                    <p><strong>Regression:</strong> <span id="workflow-regression"></span></p>
+                    <p><strong>Go/No-Go:</strong> <span id="workflow-gonogo"></span></p>
+                </div>
+
+                <!-- Delivery Compliance Card -->
+                <div class="overview-card">
+                    <div class="card-title">
+                        ✅ Code Ready Compliance
+                        <span class="confidence-badge confidence-5">5/5</span>
+                    </div>
+                    <p><strong>Code Completion:</strong> <span id="compliance-code-completion"></span></p>
+                    <p><strong>Unit Test:</strong> <span id="compliance-unit-test"></span></p>
+                    <p><strong>Review:</strong> <span id="compliance-review"></span></p>
+                    <p><strong>AC Met:</strong> <span id="compliance-ac-met"></span></p>
+                </div>
+            </div>
+
+            <!-- Column 3: Developer Capacity Breakdown -->
+            <div class="overview-card" id="devCapacityCard">
+                <div class="card-title">
+                    📊 Developer Capacity Breakdown
+                    <span class="confidence-badge confidence-4">4/5</span>
+                </div>
+                <!-- Pie Chart Canvas -->
+                <canvas id="devCapacityPieChart" style="width: 100%; height: 100%;"></canvas>
+            </div>
+        </div>
+
+        <!-- Gantt Chart Section -->
+        <div class="gantt-container">
+            <table class="gantt-chart">
+                <thead>
+                    <tr>
+                        <!-- Removed "Task / Phase" header -->
+                        <th class="date-header">Sprint 1<br>Jul 17-30</th>
+                        <th class="date-header">Sprint 2<br>Jul 31-Aug 13</th>
+                        <th class="date-header">Sprint 3<br>Aug 14-27</th>
+                        <th class="date-header">Deployment<br>Aug 28-Sep 10</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="critical-path">
+                        <!-- Removed task-name column -->
+                        <td class="development">
+                            <div class="confidence-indicator confidence-4">4/5</div>
+                            <strong>S1: Core Dev</strong><br>
+                            Core Features, Arch Setup<br>
+                            👥 6D+2L (750% Cap)
+                        </td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>
+					<tr>
+                        <!-- NEW QA Testing for Sprint 1 -->
+                        <td class="testing">
+                            <div class="confidence-indicator confidence-3">3/5</div>
+                            <strong>QA Testing</strong><br>
+                            Func. Test, Bug Ident.<br>
+                            👥 2 QA (200% Cap)
+                        </td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>
+					
+					<tr class="critical-path">
+                        <!-- Removed task-name column -->
+                        <td class="empty"></td>
+                        <td class="development">
+                            <div class="confidence-indicator confidence-3">3/5</div>
+                            <strong>S2: Features + Fixes</strong><br>
+                            New Features, Priority Fixes<br>
+                            👥 6D+2L (750% Cap)
+                        </td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>
+
+                    <tr>
+                        <!-- Removed task-name column -->
+                        <td class="empty"></td>
+                        <td class="testing">
+                            <div class="confidence-indicator confidence-3">3/5</div>
+                            <strong>QA Testing - S1</strong><br>
+                            Func. Test, Bug Ident.<br>
+                            👥 2 QA (200% Cap)
+                        </td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                    </tr>         
+
+					<tr class="critical-path">
+                        <!-- Removed task-name column -->
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="development">
+                            <div class="confidence-indicator confidence-2">4/5</div>
+                            <strong>S3: Final Fixes</strong><br>
+                            Final Features, Critical Fixes<br>
+                            👥 6D+2L (750% Cap)
+                        </td>
+                        <td class="empty"></td>
+                    </tr>					
+
+                    <tr>
+                        <!-- Removed task-name column -->
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="testing">
+                            <div class="confidence-indicator confidence-3">3/5</div>
+                            <strong>QA Testing - S2</strong><br>
+                            Integration Test, Bug Val.<br>
+                            👥 2 QA (200% Cap)
+                        </td>
+                        <td class="empty"></td>
+                    </tr>
+
+                    <tr>
+                        <!-- Removed task-name column -->
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="regression">
+                            <div class="confidence-indicator confidence-2">2/5</div>
+                            <strong>Regression Test</strong><br>
+                            Full System & Perf. Test<br>
+                            👥 2 QA (200% Cap)
+                        </td>
+                        <td class="empty"></td>
+                    </tr>                    
+
+                    <tr>
+                        <!-- Removed task-name column -->
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="code-freeze">
+                            <div class="confidence-indicator confidence-4">4/5</div>
+                            <strong>CODE FREEZE</strong><br>
+                            No New Features, Crit. Fix<br>
+                            🚫 Dev Lock (Enforced)
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <!-- Removed task-name column -->
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="go-no-go">
+                            <div class="confidence-indicator confidence-2">2/5</div>
+                            <strong>GO/NO-GO Decision</strong><br>
+                            Quality Review & Deploy.<br>
+                            👥 Full Team (Decision Gate)
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <!-- Removed task-name column -->
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="testing">
+                            <div class="confidence-indicator confidence-2">2/5</div>
+                            <strong>Final QA & Prep</strong><br>
+                            UAT Test, Deploy. Prep<br>
+                            👥 2 QA + DevOps (200% Cap)
+                        </td>
+                    </tr>
+
+                    <tr class="critical-path">
+                        <!-- Removed task-name column -->
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="empty"></td>
+                        <td class="deployment">
+                            <div class="confidence-indicator confidence-2">2/5</div>
+                            <strong>DEPLOYMENT</strong><br>
+                            Sep 10, 2025 Release<br>
+                            👥 Full Team (100% Avail)
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <!-- Removed task-name column -->
+                        <td class="regression">
+                            <div class="confidence-indicator confidence-4">4/5</div>
+                            <strong>Lead Oversight</strong><br>
+                            Arch, Code Reviews<br>
+                            👥 2 Tech Leads (150% Cap)
+                        </td>
+                        <td class="regression">
+                            <div class="confidence-indicator confidence-4">4/5</div>
+                            <strong>Lead Oversight</strong><br>
+                            Quality Gates, Code Reviews<br>
+                            👥 2 Tech Leads (150% Cap)
+                        </td>
+                        <td class="regression">
+                            <div class="confidence-indicator confidence-4">4/5</div>
+                            <strong>Lead Oversight</strong><br>
+                            Final Review, Sign-off<br>
+                            👥 2 Tech Leads (150% Cap)
+                        </td>
+                        <td class="regression">
+                            <div class="confidence-indicator confidence-4">4/5</div>
+                            <strong>Lead Oversight</strong><br>
+                            Release, Oversight<br>
+                            👥 2 Tech Leads (150% Cap)
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Confidence Level Legend -->
+        <div class="confidence-legend">
+            <h3>📊 Confidence Level Legend</h3>
+            <div class="confidence-grid">
+                <div class="confidence-item">
+                    <span class="confidence-badge confidence-5">5/5</span>
+                    <span>Very High - Fully Confident</span>
+                </div>
+                <div class="confidence-item">
+                    <span class="confidence-badge confidence-4">4/5</span>
+                    <span>High - Confident</span>
+                </div>
+                <div class="confidence-item">
+                    <span class="confidence-badge confidence-3">3/5</span>
+                    <span>Medium - Moderate Risk</span>
+                </div>
+                <div class="confidence-item">
+                    <span class="confidence-badge confidence-2">2/5</span>
+                    <span>Low - High Risk</span>
+                </div>
+                <div class="confidence-item">
+                    <span class="confidence-badge confidence-1">1/5</span>
+                    <span>Very Low - Critical Risk</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Task Type Legend -->
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color development"></div>
+                <span>Development Sprint</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color testing"></div>
+                <span>QA Testing Phase</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color regression"></div>
+                <span>Regression Testing</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color go-no-go"></div>
+                <span>Go/No-Go Decision</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color bug-fix"></div>
+                <span>Bug Fix Priority</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color code-freeze"></div>
+                <span>Code Freeze</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color deployment"></div>
+                <span>Deployment</span>
+            </div>
+        </div>
+    
+    </div>
+
+    <script>
+       // Function to calculate working days between two dates (UTC-based)
+        function getWorkingDays(startDate, endDate) {
+            let count = 0;
+            // Create new Date objects for iteration, explicitly setting them to UTC midnight
+            // This ensures consistent day boundaries regardless of the time component of the input dates
+            const current = new Date(Date.UTC(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()));
+            const end = new Date(Date.UTC(endDate.getFullYear(), endDate.getMonth(), endDate.getDate()));
+
+            while (current <= end) {
+                const dayOfWeek = current.getUTCDay(); // 0 = Sunday, 6 = Saturday in UTC
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) { // Check if it's not Saturday (6) or Sunday (0)
+                    count++;
+                }
+                current.setUTCDate(current.getUTCDate() + 1); // Move to the next day in UTC
+            }
+            return count;
+        }
+
+        let devCapacityChart; // Declare chart variable globally or in a scope accessible to updateChart
+
+        // Function to populate dashboard elements with given data
+        function populateDashboard(data) {
+            // Populate Project Timeline Card
+            document.getElementById('timeline-start').textContent = data.timeline.start;
+            document.getElementById('timeline-deployment').textContent = data.timeline.deployment;
+            document.getElementById('timeline-duration').textContent = data.timeline.duration;
+            document.getElementById('timeline-sprint-cycle').textContent = data.timeline.sprintCycle;
+
+            // Populate Team Capacity Card
+            document.getElementById('capacity-developers').textContent = data.teamCapacity.developers;
+            document.getElementById('capacity-leads').textContent = data.teamCapacity.leads;
+            document.getElementById('capacity-qa').textContent = data.teamCapacity.qaEngineers;
+            document.getElementById('capacity-total').textContent = data.teamCapacity.total;
+
+            // Populate Workflow Process Card
+            document.getElementById('workflow-development').textContent = data.workflowProcess.development;
+            document.getElementById('workflow-testing').textContent = data.workflowProcess.testing;
+            document.getElementById('workflow-regression').textContent = data.workflowProcess.regression;
+            document.getElementById('workflow-gonogo').textContent = data.workflowProcess.goNoGo;
+
+            // Populate Code Ready Compliance Card
+            document.getElementById('compliance-code-completion').textContent = data.codeReadyCompliance.codeCompletion;
+            document.getElementById('compliance-unit-test').textContent = data.codeReadyCompliance.unitTest;
+            document.getElementById('compliance-review').textContent = data.codeReadyCompliance.review;
+            document.getElementById('compliance-ac-met').textContent = data.codeReadyCompliance.acMet;
+
+            // Update Summary Statistics
+            document.getElementById('stat-team-members').textContent = data.summaryStats.teamMembers;
+            document.getElementById('stat-sprints').textContent = data.summaryStats.sprints;
+            document.getElementById('stat-deployment').textContent = data.summaryStats.deploymentDate;
+
+            // Calculate and update total working days (remains dynamic based on current date and deployment date)
+            const today = new Date();
+            const startDate = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+            const deploymentDateParts = data.timeline.deployment.match(/(\w+) (\d+), (\d+)/);
+            let deploymentMonth = new Date(Date.parse(deploymentDateParts[1] + " 1, 2000")).getMonth(); // Get 0-indexed month
+            let deploymentDay = parseInt(deploymentDateParts[2]);
+            let deploymentYear = parseInt(deploymentDateParts[3]);
+            const endDate = new Date(Date.UTC(deploymentYear, deploymentMonth, deploymentDay));
+
+            const totalWorkingDays = getWorkingDays(startDate, endDate);
+            document.getElementById('stat-working-days').textContent = totalWorkingDays;
+
+
+            // Update Pie Chart Data
+            const pieChartDataConfig = {
+                labels: [
+                    'Feature Development',
+                    'Bug Fixing',
+                    'Spikes / Tech Debt',
+                    'Support / Hotfixes',
+                    'Scrum Ceremonies & Misc'
+                ],
+                datasets: [{
+                    data: [
+                        data.developerCapacity.featureDevelopment,
+                        data.developerCapacity.bugFixing,
+                        data.developerCapacity.spikesTechDebt,
+                        data.developerCapacity.supportHotfixes,
+                        data.developerCapacity.scrumCeremoniesMisc
+                    ],
+                    backgroundColor: [
+                        '#4CAF50', /* Green */
+                        '#FFC107', /* Amber */
+                        '#2196F3', /* Blue */
+                        '#F44336', /* Red */
+                        '#9C27B0'  /* Purple */
+                    ],
+                    hoverOffset: 4
+                }]
+            };
+
+            if (devCapacityChart) {
+                devCapacityChart.data = pieChartDataConfig;
+                devCapacityChart.update();
+            } else {
+                const ctx = document.getElementById('devCapacityPieChart').getContext('2d');
+                devCapacityChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: pieChartDataConfig,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: {
+                                    color: '#2c3e50',
+                                    font: { family: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif' },
+                                    generateLabels: function(chart) {
+                                        const data = chart.data;
+                                        if (data.labels.length && data.datasets.length) {
+                                            return data.labels.map(function(label, i) {
+                                                const backgroundColor = data.datasets[0].backgroundColor[i];
+                                                const value = data.datasets[0].data[i];
+                                                return {
+                                                    text: `${label} (${value}%)`,
+                                                    fillStyle: backgroundColor,
+                                                    strokeStyle: backgroundColor,
+                                                    lineWidth: 2,
+                                                    index: i
+                                                };
+                                            });
+                                        }
+                                        return [];
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.label || '';
+                                        if (label) { label += ': '; }
+                                        if (context.parsed !== null) { label += context.parsed + '%'; }
+                                        return label;
+                                    }
+                                }
+                            },
+                            datalabels: {
+                                color: '#fff',
+                                formatter: (value, ctx) => { return value + '%'; },
+                                font: { weight: 'bold', size: 10 }
+                            }
+                        }
+                    },
+                    plugins: [ChartDataLabels]
+                });
+            }
+        }
+
+        // Add interactivity and Chart.js initialization
+        document.addEventListener('DOMContentLoaded', function() {
+            // Default Project Data
+            const defaultProjectData = {
+                timeline: {
+                    start: "July 17, 2025",
+                    deployment: "September 10, 2025",
+                    duration: "8 weeks (3 sprints + deployment)",
+                    sprintCycle: "2 weeks each"
+                },
+                teamCapacity: {
+                    developers: "6 (100% capacity)",
+                    leads: "2 (75% capacity)",
+                    qaEngineers: "2 (100% capacity)",
+                    total: "950% capacity per sprint"
+                },
+                workflowProcess: {
+                    development: "Bug fix priority",
+                    testing: "2 weeks per sprint",
+                    regression: "Continuous validation",
+                    goNoGo: "Quality gates"
+                },
+                codeReadyCompliance: {
+                    codeCompletion: "Functionality developed",
+                    unitTest: "Unit tests written and passed, covering edge cases",
+                    review: "Peer review completed and approved",
+                    acMet: "Acceptance Criteria fully met"
+                },
+                developerCapacity: {
+                    featureDevelopment: 50,
+                    bugFixing: 20,
+                    spikesTechDebt: 15,
+                    supportHotfixes: 10,
+                    scrumCeremoniesMisc: 5
+                },
+                summaryStats: {
+                    teamMembers: 10,
+                    sprints: 3,
+                    deploymentDate: "Sep 10"
+                }
+            };
+
+            // Populate dashboard with default data on load
+            populateDashboard(defaultProjectData);
+
+            // Pre-populate the textarea with the default JSON data for immediate use
+            document.getElementById('jsonDataInput').value = JSON.stringify(defaultProjectData, null, 4);
+
+
+            // Animate the gantt chart bars on load by staggering their animation delay
+            const cells = document.querySelectorAll('.development, .testing, .regression, .go-no-go, .deployment, .bug-fix, .code-freeze');
+            cells.forEach((cell, index) => {
+                cell.style.animationDelay = `${index * 0.08}s`; // Slightly faster stagger delay
+            });
+
+            const configureBtn = document.getElementById('configureBtn');
+            const configSection = document.getElementById('configSection');
+            const loadDataBtn = document.getElementById('loadDataBtn');
+            const jsonDataInput = document.getElementById('jsonDataInput');
+            const messageArea = document.getElementById('messageArea');
+
+            // Toggle config section visibility
+            configureBtn.addEventListener('click', function() {
+                configSection.style.display = configSection.style.display === 'none' || configSection.style.display === '' ? 'block' : 'none';
+                messageArea.textContent = ''; // Clear messages when toggling
+                messageArea.className = 'message'; // Reset class
+            });
+
+            // Load Data Button Event Listener
+            loadDataBtn.addEventListener('click', function() {
+                messageArea.textContent = ''; // Clear previous messages
+                messageArea.className = 'message'; // Reset class
+
+                try {
+                    const parsedData = JSON.parse(jsonDataInput.value);
+                    populateDashboard(parsedData);
+                    messageArea.textContent = 'Dashboard updated successfully!';
+                    messageArea.classList.add('success');
+                    // Hide config section after successful load
+                    configSection.style.display = 'none';
+                } catch (error) {
+                    messageArea.textContent = 'Error: Invalid JSON format. Please check your input.';
+                    messageArea.classList.add('error');
+                    console.error('JSON parsing error:', error);
+                }
+            });
+
+            /**
+             * Highlights rows identified as critical path by applying a pulsing animation.
+             */
+            function highlightCriticalPath() {
+                const criticalRows = document.querySelectorAll('.critical-path');
+                criticalRows.forEach(row => {
+                    // Apply a pulsing animation for 2 seconds, ease-in-out, repeating 3 times
+                    row.style.animation = 'pulse 2s ease-in-out 3';
+                });
+            }
+
+            /**
+             * Visually emphasizes confidence indicators by scaling them up briefly.
+             */
+            function showConfidenceLevels() {
+                const confidenceIndicators = document.querySelectorAll('.confidence-indicator');
+                confidenceIndicators.forEach(indicator => {
+                    // Scale up the indicator
+                    indicator.style.transform = 'scale(1.3)';
+                    indicator.style.transition = 'transform 0.3s ease'; // Smooth transition
+                    indicator.style.zIndex = '20'; // Bring to front temporarily
+                    
+                    // After a short delay, scale it back down
+                    setTimeout(() => {
+                        indicator.style.transform = 'scale(1)';
+                        indicator.style.zIndex = '10'; // Reset z-index
+                    }, 300); // Match timeout with transition duration
+                });
+            }
+
+            // Data for the pie chart
+            const pieChartData = {
+                labels: [
+                    'Feature Development',
+                    'Bug Fixing',
+                    'Spikes / Tech Debt',
+                    'Support / Hotfixes',
+                    'Scrum Ceremonies & Misc'
+                ],
+                datasets: [{
+                    data: [50, 20, 15, 10, 5],
+                    backgroundColor: [
+                        '#4CAF50', /* Green */
+                        '#FFC107', /* Amber */
+                        '#2196F3', /* Blue */
+                        '#F44336', /* Red */
+                        '#9C27B0'  /* Purple */
+                    ],
+                    hoverOffset: 4
+                }]
+            };
+
+            // Configuration options for the pie chart
+            const pieChartConfig = {
+                type: 'pie',
+                data: pieChartData,
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false, /* Allow canvas to resize freely */
+                    plugins: {
+                        legend: {
+                            position: 'right', /* Place legend on the right */
+                            labels: {
+                                color: '#2c3e50', /* Match application font color */
+                                font: {
+                                    family: 'Segoe UI, Tahoma, Geneva, Verdana, sans-serif' /* Match application font */
+                                },
+                                generateLabels: function(chart) {
+                                    const data = chart.data;
+                                    if (data.labels.length && data.datasets.length) {
+                                        return data.labels.map(function(label, i) {
+                                            // Correctly access backgroundColor from the dataset
+                                            const backgroundColor = data.datasets[0].backgroundColor[i];
+                                            const value = data.datasets[0].data[i];
+                                            return {
+                                                text: `${label} (${value}%)`, // Add percentage to legend label
+                                                fillStyle: backgroundColor, // Use the correct background color
+                                                strokeStyle: backgroundColor, // Use the correct stroke color
+                                                lineWidth: 2,
+                                                // Removed 'hidden' property as it was a potential source of error
+                                                index: i
+                                            };
+                                        });
+                                    }
+                                    return [];
+                                }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed !== null) {
+                                        label += context.parsed + '%';
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                        datalabels: { // Datalabels plugin configuration
+                            color: '#fff', // White color for labels
+                            formatter: (value, ctx) => {
+                                return value + '%'; // Display percentage value
+                            },
+                            font: {
+                                weight: 'bold',
+                                size: 10
+                            }
+                        }
+                    }
+                },
+                plugins: [ChartDataLabels] // Register the plugin
+            };
+
+            // Get the canvas element and render the chart
+            const ctx = document.getElementById('devCapacityPieChart').getContext('2d');
+            new Chart(ctx, pieChartConfig);
+
+            // Dynamic height adjustment for the Developer Capacity Breakdown card
+            function adjustDevCapacityCardHeight() {
+                const devCapacityCard = document.getElementById('devCapacityCard');
+                const pairedCardsContainer = document.getElementById('pairedCardsContainer1'); // Use either container, as they should be same height
+
+                if (devCapacityCard && pairedCardsContainer) {
+                    // Get the computed height of the paired cards container
+                    const computedHeight = pairedCardsContainer.offsetHeight;
+                    // Apply this height to the Developer Capacity Breakdown card
+                    devCapacityCard.style.height = `${computedHeight}px`;
+                }
+            }
+
+            // Call the adjustment function initially and on window resize
+            adjustDevCapacityCardHeight();
+            window.addEventListener('resize', adjustDevCapacityCardHeight);
+        });
+    </script>
+</body>
+</html>
